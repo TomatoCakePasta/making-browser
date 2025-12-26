@@ -29,7 +29,7 @@ else
   echo $OS_PATH" doesn't exist"
   echo "cloning wasabi project..."
   cd $TARGET_PATH
-  git clone --branch for_saba git@github.com:hikalium/wasabi.git
+  git clone --branch for_saba https://github.com/hikalium/wasabi.git
 fi
 
 # アプリケーションのトップディレクトリに移動する
@@ -38,7 +38,7 @@ cd $HOME_PATH
 # Makefileをダウンロードする
 if [ ! -f $MAKEFILE_PATH ]; then
   echo "downloading Makefile..."
-  wget https://raw.githubusercontent.com/hikalium/wasabi/for_saba/external_app_template/Makefile
+  curl -LO https://raw.githubusercontent.com/hikalium/wasabi/for_saba/external_app_template/Makefile
 fi
 
 make build
