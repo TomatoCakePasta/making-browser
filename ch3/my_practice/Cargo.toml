@@ -1,9 +1,11 @@
-workspace = { members = ["my_practice"] }
+workspace = { members = [ "net/wasabi","saba_core"] }
 [package]
-name = "saba"
+name = "my_practice"
 version = "0.1.0"
 edition = "2021"
 default-run = "saba"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 default = ["wasabi"]
