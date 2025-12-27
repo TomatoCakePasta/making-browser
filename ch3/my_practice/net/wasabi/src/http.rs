@@ -7,6 +7,7 @@ use alloc::string::ToString;
 use noli::net::lookup_host;
 use noli::net::SocketAddr;
 use noli::net::TcpStream;
+use alloc::vec::Vec;
 
 pub struct HttpClient {}
 
@@ -80,6 +81,28 @@ impl HttpClient {
                     "Failed to send a request to TCP stream".to_string(),
                 ));
             }
+        }
+
+        // receiving the HTTP response from the server via TCP stream
+        // TcpStream struct has read() method to receive data
+        let mut received = Vec::new();
+        // read() splits the received data into chunks
+        // so we need to loop until all data is received
+        loop {
+            let mut buf = [0u8; 4096];
+            let bytes_read = match stream.read(&mut buf) {
+                Ok(bytes) => bytes,
+                Err(_) => {
+                    return Err(Error::Network(
+                        "Failed to receive a request from TCP stream".to_string(),
+                    ))
+                }
+            };
+            if bytes_read == 0 {
+                break;
+            }
+            // connecting the received chunk to the total received data
+            received.extend_from_slice(&buf[..bytes_read]);
         }
     }
 }
