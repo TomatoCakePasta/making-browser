@@ -1,6 +1,6 @@
 extern crate alloc;
 use alloc::string::String;
-use saba_core::error:Error;
+use saba_core::error::Error;
 use saba_core::http::HttpResponse;
 use alloc::format;
 use alloc::string::ToString;
@@ -81,7 +81,7 @@ impl HttpClient {
                     "Failed to send a request to TCP stream".to_string(),
                 ));
             }
-        }
+        };
 
         // receiving the HTTP response from the server via TCP stream
         // TcpStream struct has read() method to receive data
