@@ -104,5 +104,12 @@ impl HttpClient {
             // connecting the received chunk to the total received data
             received.extend_from_slice(&buf[..bytes_read]);
         }
+
+        // change response data from bytes to string by from_utf8() method
+        match core::str::from_utf8(&received) {
+            // create HttpResponse structure from response string
+            Ok(response) => HttpResponse::new(response.to_string()),
+            Err(e) => Err(Error::Network(format!("Invalid received response: {}", e))),
+        }
     }
 }
