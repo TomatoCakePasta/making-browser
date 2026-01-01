@@ -46,6 +46,8 @@ impl Window {
     }
 }
 
+// To prevent infinite loop
+// not add PartialEq, Eq
 #[derive(Debug, Clone)]
 pub struct Node {
     // node types
@@ -60,6 +62,12 @@ pub struct Node {
     // The previous sibling of a node
     previous_sibling: Weak<RefCell<Node>>,
     next_sibling: Option<Rc<RefCell<Node>>>,
+}
+
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
 }
 
 impl Node {
@@ -141,7 +149,7 @@ impl Node {
 
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub enum NodeKind {
     // This interface allows you to get the previous content values ​
     // ​using getElementById, getElementsByClassName
@@ -154,6 +162,19 @@ pub enum NodeKind {
 
     // This interface represents the text content within an element
     Text(String),
+}
+
+impl PartialEq for NodeKind {
+    fn eq(&self, other: &Self) -> bool {
+        match &self {
+            NodeKind::Document => matches!(other, NodeKind::Document),
+            NodeKind::Element(e1) => match &other {
+                NodeKind::Element(e2) => e1.kind == e2.kind,
+                _ => false,
+            },
+            NodeKind::Text(_) => matches!(other, NodeKind::Text(_)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
