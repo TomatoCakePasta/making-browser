@@ -12,7 +12,7 @@ pub enum CssToken {
     CloseParenthesis,
     OpenCurly,
     CloseCurly,
-    Indent(String),
+    Ident(String),
     StringToken(String),
     AtKeyword(String),
 }
@@ -92,7 +92,7 @@ impl CssTokenizer {
     }
 
     // As long as a character, numberm, '-' or '_' continues to appear, it is interpreted as a identifier.
-    fn consume_indent_token(&mut self) -> String {
+    fn consume_ident_token(&mut self) -> String {
         let mut s = String::new();
         s.push(self.input[self.pos]);
 
@@ -156,14 +156,14 @@ impl Iterator for CssTokenizer {
                 }
                 '#' => {
                     // This time, it will always be treated as an ID selector in the format #ID
-                    let value = self.consume_indent_token();
+                    let value = self.consume_ident_token();
                     self.pos -= 1;
                     CssToken::HashToken(value)
                 }
                 '-' => {
                     // This book does not deal with negative numbers, 
                     // so the hyphen is treated as an identifier.
-                    let t = CssToken::Indent(self.consume_indent_token());
+                    let t = CssToken::Ident(self.consume_ident_token());
                     self.pos -= 1;
                     t
                 }
@@ -179,7 +179,7 @@ impl Iterator for CssTokenizer {
                     {
                         // skip '@'
                         self.pos += 1;
-                        let t = CssToken::AtKeyword(self.consume_indent_token());
+                        let t = CssToken::AtKeyword(self.consume_ident_token());
                         self.pos -= 1;
                         t
                     } else {
@@ -187,7 +187,7 @@ impl Iterator for CssTokenizer {
                     }
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
-                    let t = CssToken::Indent(self.consume_indent_token());
+                    let t = CssToken::Ident(self.consume_ident_token());
                     self.pos -= 1;
                     t
                 }
@@ -219,11 +219,11 @@ mod tests {
         let style = "p { color: red; }".to_string();
         let mut t = CssTokenizer::new(style);
         let expected = [
-            CssToken::Indent("p".to_string()),
+            CssToken::Ident("p".to_string()),
             CssToken::OpenCurly,
-            CssToken::Indent("color".to_string()),
+            CssToken::Ident("color".to_string()),
             CssToken::Colon,
-            CssToken::Indent("red".to_string()),
+            CssToken::Ident("red".to_string()),
             CssToken::SemiColon,
             CssToken::CloseCurly,
         ];
@@ -241,9 +241,9 @@ mod tests {
         let expected = [
             CssToken::HashToken("#id".to_string()),
             CssToken::OpenCurly,
-            CssToken::Indent("color".to_string()),
+            CssToken::Ident("color".to_string()),
             CssToken::Colon,
-            CssToken::Indent("red".to_string()),
+            CssToken::Ident("red".to_string()),
             CssToken::SemiColon,
             CssToken::CloseCurly,
         ];
@@ -259,11 +259,11 @@ mod tests {
         let mut t = CssTokenizer::new(style);
         let expected = [
             CssToken::Delim('.'),
-            CssToken::Indent("class".to_string()),
+            CssToken::Ident("class".to_string()),
             CssToken::OpenCurly,
-            CssToken::Indent("color".to_string()),
+            CssToken::Ident("color".to_string()),
             CssToken::Colon,
-            CssToken::Indent("red".to_string()),
+            CssToken::Ident("red".to_string()),
             CssToken::SemiColon,
             CssToken::CloseCurly,
         ];
@@ -278,22 +278,22 @@ mod tests {
         let style = "p { content: \"Hey\"; } h1 { font-size: 40; color: blue; }".to_string();
         let mut t = CssTokenizer::new(style);
         let expected = [
-            CssToken::Indent("p".to_string()),
+            CssToken::Ident("p".to_string()),
             CssToken::OpenCurly,
-            CssToken::Indent("content".to_string()),
+            CssToken::Ident("content".to_string()),
             CssToken::Colon,
             CssToken::StringToken("Hey".to_string()),
             CssToken::SemiColon,
             CssToken::CloseCurly,
-            CssToken::Indent("h1".to_string()),
+            CssToken::Ident("h1".to_string()),
             CssToken::OpenCurly,
-            CssToken::Indent("font-size".to_string()),
+            CssToken::Ident("font-size".to_string()),
             CssToken::Colon,
             CssToken::Number(40.0),
             CssToken::SemiColon,
-            CssToken::Indent("color".to_string()),
+            CssToken::Ident("color".to_string()),
             CssToken::Colon,
-            CssToken::Indent("blue".to_string()),
+            CssToken::Ident("blue".to_string()),
             CssToken::SemiColon,
             CssToken::CloseCurly,
         ];
