@@ -13,6 +13,10 @@ use noli::window::StringSize;
 use saba_core::constants::*;
 use alloc::format;
 use saba_core::error::Error;
+use noli::prelude::SystemApi;
+use noli::println;
+use noli::sys::api::MouseEvent;
+use noli::sys::wasabi::Api;
 
 #[derive(Debug)]
 pub struct WasabiUI {
@@ -45,6 +49,20 @@ impl WasabiUI {
     }
 
     fn run_app(&mut self) -> Result<(), Error> {
+        loop {
+            self.handle_mouse_input()?;
+        }
+    }
+
+    fn handle_mouse_input(&mut self) -> Result<(), Error> {
+        if let Some(MouseEvent {
+            button: _button,
+            position,
+        }) = Api::get_mouse_cursor_info()
+        {
+            println!("mouse position {:?}", position);
+        }
+
         Ok(())
     }
 
