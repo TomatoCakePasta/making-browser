@@ -1,4 +1,5 @@
 use crate::renderer::dom::node::Node;
+use crate::renderer::dom::node::NodeKind;
 use crate::renderer::layout::computed_style::ComputedStyle;
 use alloc::rc::Rc;
 use alloc::rc::Weak;
@@ -11,6 +12,10 @@ use crate::renderer::css::cssom::ComponentValue;
 use crate::renderer::css::cssom::Declaration;
 use crate::renderer::layout::computed_style::Color;
 use alloc::vec::Vec;
+use crate::constants::CONTENT_AREA_WIDTH;
+use crate::constants::CHAR_WIDTH;
+use crate::constants::CHAR_HEIGHT_WITH_PADDING;
+use crate::renderer::layout::computed_style::FontSize;
 
 pub fn create_layout_object(
     node: &Option<Rc<RefCell<Node>>>,
@@ -49,7 +54,7 @@ pub fn create_layout_object(
     None
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Ea)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum LayoutObjectKind {
     Block,
     Inline,
@@ -70,7 +75,7 @@ pub struct LayoutObject {
     size: LayoutSize,
 }
 
-impl PartialEq for LayoutObuject {
+impl PartialEq for LayoutObject {
     fn eq(&self, other: &Self) -> bool {
         self.kind == other.kind
     }
@@ -94,6 +99,122 @@ impl LayoutObject {
             point: LayoutPoint::new(0, 0),
             size: LayoutSize::new(0, 0),
         }
+    }
+
+    pub fn compute_size(&mut self, parent_size: LayoutSize) {
+        let mut size = LayoutSize::new(0, 0);
+
+        match self.kind() {
+            // The width of the parent node becomes the width of the node itself.
+            LayoutObjectKind::Block => {
+                size.set_width(parent_size.width());
+
+                let mut height = 0;
+                let mut child = self.first_child();
+                let mut previous_child_kind = LayoutObjectKind::Block;
+
+                // The height is the sum of the heights of all child nodes
+                // Be careful when inline elements are side by side
+                while child.is_some() {
+                    let c = match child {
+                        Some(c) => c,
+                        None => panic!("first child should exist"),
+                    };
+
+                    if previous_child_kind == LayoutObjectKind::Block || c.borrow().kind() == LayoutObjectKind::Block {
+                        height += c.borrow().size.height();
+                    }
+
+                    previous_child_kind = c.borrow().kind();
+                    child = c.borrow().next_sibling();
+                }
+                size.set_height(height);
+            }
+            LayoutObjectKind::Inline => {
+                // The height and width of the current node are the sum of the heights 
+                // and widths of all child nodes.
+                let mut width = 0;
+                let mut height = 0;
+                let mut child = self.first_child();
+
+                while child.is_some() {
+                    let c = match child {
+                        Some(c) => c,
+                        None => panic!("first child should exist"),
+                    };
+
+                    width += c.borrow().size.width();
+                    height += c.borrow().size.height();
+
+                    child = c.borrow().next_sibling();
+                }
+
+                size.set_width(width);
+                size.set_height(height);
+            }
+            LayoutObjectKind::Text => {
+                if let NodeKind::Text(t) = self.node_kind() {
+                    let ratio = match self.style.font_size() {
+                        FontSize::Medium => 1,
+                        FontSize::XLarge => 2,
+                        FontSize::XXLarge => 3,
+                    };
+
+                    let width = CHAR_WIDTH * ratio * t.len() as i64;
+                    if width > CONTENT_AREA_WIDTH {
+                        // If the text is multi-line
+                        size.set_width(CONTENT_AREA_WIDTH);
+                        let line_num = if width.wrapping_rem(CONTENT_AREA_WIDTH) == 0 {
+                            width.wrapping_div(CONTENT_AREA_WIDTH)
+                        } else {
+                            width.wrapping_div(CONTENT_AREA_WIDTH) + 1
+                        };
+                        size.set_height(CHAR_HEIGHT_WITH_PADDING * ratio * line_num);
+                    } else {
+                        // When the text fits on one lines
+                        size.set_width(width);
+                        size.set_height(CHAR_HEIGHT_WITH_PADDING * ratio);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn compute_position(
+        &mut self,
+        parent_point: LayoutPoint,
+        previous_sibling_kind: LayoutObjectKind,
+        previous_sibling_point: Option<LayoutPoint>,
+        previous_sibling_size: Option<LayoutSize>,
+    ) {
+        let mut point = LayoutPoint::new(0, 0);
+
+        match (self.kind(), previous_sibling_kind) {
+            // If the block element is a sibling node, proceed along the Y axis
+            (LayoutObjectKind::Block, _) | (_, LayoutObjectKind::Block) => {
+                if let (Some(size), Some(pos)) = (previous_sibling_size, previous_sibling_point) {
+                    point.set_y(pos.y() + size.height());
+                } else {
+                    point.set_y(parent_point.y());
+                }
+                point.set_x(parent_point.x());
+            }
+            // If inline elements are aligned, proceed along the x-axis
+            (LayoutObjectKind::Inline, LayoutObjectKind::Inline) => {
+                if let (Some(size), Some(pos)) = (previous_sibling_size, previous_sibling_point) {
+                    point.set_x(pos.x() + size.width());
+                    point.set_y(pos.y());
+                } else {
+                    point.set_x(parent_point.x());
+                    point.set_y(parent_point.y());
+                }
+            }
+            _ => {
+                point.set_x(parent_point.x());
+                point.set_y(parent_point.y());
+            }
+        }
+        self.point = point;
     }
 
     pub fn is_node_selected(&self, selector: &Selector) -> bool {
@@ -183,7 +304,7 @@ impl LayoutObject {
     // Calls defaulting() on the CSS style information of a node.
     pub fn defaulting_style(
         &mut self,
-        node: %Rc<RefCell<Node>>,
+        node: &Rc<RefCell<Node>>,
         parent_style: Option<ComputedStyle>,
     ) {
         self.style.defaulting(node, parent_style);
@@ -194,7 +315,7 @@ impl LayoutObject {
     // following example
     // Div is a block element by default, 
     // but if you specify display: inline (or inline-block, etc.) in CSS,
-LayoutObjectKind will change from Block to Inline.
+    // LayoutObjectKind will change from Block to Inline.
     pub fn update_kind(&mut self) {
         match self.node_kind() {
             NodeKind::Document => panic!("should not create a layout object for a Document node"),
@@ -202,7 +323,7 @@ LayoutObjectKind will change from Block to Inline.
                 let display = self.style.display();
                 match display {
                     DisplayType::Block => self.kind = LayoutObjectKind::Block,
-                    DisplayType::Inline => self.kind = LayoutObject::Inline,
+                    DisplayType::Inline => self.kind = LayoutObjectKind::Inline,
                     DisplayType::DisplayNone => {
                         panic!("should not create a layout object for display:none")
                     }

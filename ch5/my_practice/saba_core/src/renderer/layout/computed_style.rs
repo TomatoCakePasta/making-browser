@@ -55,8 +55,8 @@ impl ComputedStyle {
         }
 
         // Set the initial value for each property
-        if self.backgrouind_color.is_none() {
-            self.backgrouind_color = Some(Color::white());
+        if self.background_color.is_none() {
+            self.background_color = Some(Color::white());
         }
         if self.color.is_none() {
             self.color = Some(Color::black());
@@ -71,10 +71,10 @@ impl ComputedStyle {
             self.text_decoration = Some(TextDecoration::default(node));
         }
         if self.height.is_none() {
-            self.height = Some(0, 0);
+            self.height = Some(0.0);
         }
         if self.width.is_none() {
-            self.width = Some(0, 0);
+            self.width = Some(0.0);
         }
     }
 
@@ -177,7 +177,7 @@ impl Color {
     }
 
     pub fn from_code(code: &str) -> Result<Self, Error> {
-        if code.chars().nth(0) != Some('#') || code.lent() != 7 {
+        if code.chars().nth(0) != Some('#') || code.len() != 7 {
             return Err(Error::UnexpectedInput(format!(
                 "invalid color code {}",
                 code
@@ -265,7 +265,7 @@ pub enum DisplayType {
 }
 
 impl DisplayType {
-    fn default(node: &Tc<RefCell<Node>>) -> Self {
+    fn default(node: &Rc<RefCell<Node>>) -> Self {
         match &node.borrow().kind() {
             NodeKind::Document => DisplayType::Block,
             NodeKind::Element(e) => {

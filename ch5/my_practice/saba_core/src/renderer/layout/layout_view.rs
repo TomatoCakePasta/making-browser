@@ -6,6 +6,10 @@ use crate::renderer::layout::layout_object::LayoutObject;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use crate::renderer::layout::layout_object::create_layout_object;
+use crate::constants::CONTENT_AREA_WIDTH;
+use crate::renderer::layout::layout_object::LayoutPoint;
+use crate::renderer::layout::layout_object::LayoutSize;
+use crate::renderer::layout::layout_object::LayoutObjectKind;
 
 fn build_layout_tree(
     node: &Option<Rc<RefCell<Node>>>,
@@ -104,7 +108,7 @@ fn build_layout_tree(
 // Managing the layout tree
 #[derive(Debug, Clone)]
 pub struct LayoutView {
-    root: Option<rc<RefCell<LayoutObject>>>,
+    root: Option<Rc<RefCell<LayoutObject>>>,
 }
 
 impl LayoutView {
@@ -123,6 +127,77 @@ impl LayoutView {
         tree.update_layout();
 
         tree
+    }
+
+    fn calculate_node_size(node: &Option<Rc<RefCell<LayoutObject>>>, parent_size: LayoutSize) {
+        if let Some(n) = node {
+            // If the node is a block element, 
+            // determine its width before calculating the layout of its child nodes.
+            if n.borrow().kind() == LayoutObjectKind::Block {
+                n.borrow_mut().compute_size(parent_size);
+            }
+
+            let first_child = n.borrow().first_child();
+            Self::calculate_node_size(&first_child, n.borrow().size());
+
+            let next_sibling = n.borrow().next_sibling();
+            Self::calculate_node_size(&next_sibling, parent_size);
+
+            // Calculating size after child nodes are sized
+            // For block elements, the height depends on the height of the child nodes.
+            // For inline elements, the height and width also depend on the child nodes.
+            n.borrow_mut().compute_size(parent_size);
+        }
+    }
+
+    fn calculate_node_position(
+        node: &Option<Rc<RefCell<LayoutObject>>>,
+        parent_point: LayoutPoint,
+        previous_sibling_kind: LayoutObjectKind,
+        previous_sibling_point: Option<LayoutPoint>,
+        previous_sibling_size: Option<LayoutSize>,
+    ) {
+        if let Some(n) = node {
+            n.borrow_mut().compute_position(
+                parent_point,
+                previous_sibling_kind,
+                previous_sibling_point,
+                previous_sibling_size,
+            );
+
+            // Calculate the position of a node's children
+            let first_child = n.borrow().first_child();
+            Self::calculate_node_position(
+                &first_child,
+                n.borrow().point(),
+                LayoutObjectKind::Block,
+                None,
+                None,
+            );
+    
+            // Calculate the position of a node's sibling
+            let next_sibling = n.borrow().next_sibling();
+            Self::calculate_node_position(
+                &next_sibling,
+                parent_point,
+                n.borrow().kind(),
+                Some(n.borrow().point()),
+                Some(n.borrow().size()),
+            );
+        };
+
+    }
+
+    fn update_layout(&mut self) {
+        Self::calculate_node_size(&self.root, LayoutSize::new(CONTENT_AREA_WIDTH, 0));
+
+        Self::calculate_node_position(
+            &self.root,
+            LayoutPoint::new(0, 0),
+            LayoutObjectKind::Block,
+            None,
+            None,
+        );
     }
 
     pub fn root(&self) -> Option<Rc<RefCell<LayoutObject>>> {
@@ -158,7 +233,7 @@ mod tests {
     #[test]
     fn test_empty() {
         let layout_view = create_layout_view("".to_string());
-        assert_eq!(None, layou_view.root());
+        assert_eq!(None, layout_view.root());
     }
 
     #[test]
