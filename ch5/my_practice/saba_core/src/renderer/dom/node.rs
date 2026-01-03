@@ -200,6 +200,10 @@ impl Element {
         self.kind
     }
 
+    pub fn attributes(&self) -> Vec<Attribute> {
+        self.attributes.clone()
+    }
+
     pub fn is_block_element(&self) -> bool {
         match self.kind {
             ElementKind::Body
