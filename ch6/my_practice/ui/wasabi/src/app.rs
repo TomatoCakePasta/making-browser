@@ -17,10 +17,22 @@ use noli::prelude::SystemApi;
 use noli::println;
 use noli::sys::api::MouseEvent;
 use noli::sys::wasabi::Api;
+use alloc::string::String;
+use noli::rect::Rect;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InputMode {
+    // unable to input key
+    Normal,
+    // able to input key
+    Editing,
+}
 
 #[derive(Debug)]
 pub struct WasabiUI {
     browser: Rc<RefCell<Browser>>,
+    input_url: String,
+    input_mode: InputMode,
     window: Window,
 }
 
@@ -28,6 +40,8 @@ impl WasabiUI {
     pub fn new(browser: Rc<RefCell<Browser>>) -> Self {
         Self {
             browser,
+            input_url: String::new(),
+            input_mode: InputMode::Normal,
             window: Window::new(
                 "saba".to_string(),
                 WHITE,
@@ -58,17 +72,66 @@ impl WasabiUI {
     fn handle_mouse_input(&mut self) -> Result<(), Error> {
         if let Some(MouseEvent { button, position }) = Api::get_mouse_cursor_info() {
             if button.l() || button.c() || button.r() {
-                println!("mouse clicked {:?}", button);
+                // println!("mouse clicked {:?}", button);
+                
+                // calculate relative position
+                let relative_pos = (
+                    position.x - WINDOW_INIT_X_POS,
+                    position.y - WINDOW_INIT_Y_POS,
+                );
+
+                // do nothing when outside of window is clicked
+                if relative_pos.0 < 0
+                    || relative_pos.0 > WINDOW_WIDTH
+                    || relative_pos.1 < 0
+                    || relative_pos.1 > WINDOW_HEIGHT
+                {
+                    println!("button clicked OUTSIDE window: {button:?} {position:?}");
+                    return Ok(());
+                }
+
+                // change mode from Normal to Editing when inside of window is clicked
+                if relative_pos.1 < TOOLBAR_HEIGHT + TITLE_BAR_HEIGHT
+                    && relative_pos.1 >= TITLE_BAR_HEIGHT
+                {
+                    self.clear_address_bar()?;
+                    self.input_url = String::new();
+                    self.input_mode = InputMode::Editing;
+                    println!("button clicked in toolbar: {button:?} {position:?}");
+                    return Ok(());
+                }
+
+                self.input_mode = InputMode::Normal;
+
             }
-            println!("mouse position {:?}", position);
+            // println!("mouse position {:?}", position);
         }
 
         Ok(())
     }
 
     fn handle_key_input(&mut self) -> Result<(), Error> {
-        if let Some(c) = Api::read_key() {
-            println!("input text: {:?}", c);
+        // if let Some(c) = Api::read_key() {
+        //     println!("input text: {:?}", c);
+        // }
+
+        match self.input_mode {
+            InputMode::Normal => {
+                // ignore key input
+                let _ = Api::read_key();
+            }
+            InputMode::Editing => {
+                if let Some(c) = Api::read_key() {
+                    if c == 0x7F as char || c == 0x08 as char {
+                        // delete the last character when delete or backspace key is pushed
+                        self.input_url.pop();
+                        self.update_address_bar()?;
+                    } else {
+                        self.input_url.push(c);
+                        self.update_address_bar()?;
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -123,6 +186,76 @@ impl WasabiUI {
         self.window.draw_line(BLACK, 71, 3, WINDOW_WIDTH - 5, 3)?;
         self.window
             .draw_line(GREY, 71, 3, 71, 1 + ADDRESSBAR_HEIGHT)?;
+
+        Ok(())
+    }
+
+    fn update_address_bar(&mut self) -> Result<(), Error> {
+        // paint address bar white
+        if self
+            .window
+            .fill_rect(WHITE, 72, 4, WINDOW_WIDTH - 76, ADDRESSBAR_HEIGHT - 2)
+            .is_err()
+        {
+            return Err(Error::InvalidUI(
+                "failed to clear an address bar".to_string(),
+            ));
+        }
+
+        // display input_url in the address bar
+        if self
+            .window
+            .draw_string(
+                BLACK,
+                74,
+                6,
+                &self.input_url,
+                StringSize::Medium,
+                /*underline=*/ false,
+            )
+            .is_err()
+        {
+            return Err(Error::InvalidUI(
+                "failed to update an address bar".to_string(),
+            ));
+        }
+
+        // update monitor of address bar
+        self.window.flush_area(
+            Rect::new(
+                WINDOW_INIT_X_POS,
+                WINDOW_INIT_Y_POS + TITLE_BAR_HEIGHT,
+                WINDOW_WIDTH,
+                TOOLBAR_HEIGHT,
+            )
+            .expect("failed to create a rect for the address bar"),
+        );
+
+        Ok(())
+    }
+
+    fn clear_address_bar(&mut self) -> Result<(), Error> {
+        // paint address bar white
+        if self
+            .window
+            .fill_rect(WHITE, 72, 4, WINDOW_WIDTH - 76, ADDRESSBAR_HEIGHT - 2)
+            .is_err()
+        {
+            return Err(Error::InvalidUI(
+                "failed to clear an address bar".to_string(),
+            ));
+        }
+
+        // update monitor of address bar
+        self.window.flush_area(
+            Rect::new(
+                WINDOW_INIT_X_POS,
+                WINDOW_INIT_Y_POS + TITLE_BAR_HEIGHT,
+                WINDOW_WIDTH,
+                TOOLBAR_HEIGHT,
+            )
+            .expect("failed to create a rect for the address bar"),
+        );
 
         Ok(())
     }
