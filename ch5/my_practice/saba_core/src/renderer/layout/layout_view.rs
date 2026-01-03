@@ -10,6 +10,8 @@ use crate::constants::CONTENT_AREA_WIDTH;
 use crate::renderer::layout::layout_object::LayoutPoint;
 use crate::renderer::layout::layout_object::LayoutSize;
 use crate::renderer::layout::layout_object::LayoutObjectKind;
+use crate::display_item::DisplayItem;
+use alloc::vec::Vec;
 
 fn build_layout_tree(
     node: &Option<Rc<RefCell<Node>>>,
@@ -198,6 +200,29 @@ impl LayoutView {
             None,
             None,
         );
+    }
+
+    fn paint_node(node: &Option<Rc<RefCell<LayoutObject>>>, display_items: &mut Vec<DisplayItem>) {
+        match node {
+            Some(n) => {
+                display_items.extend(n.borrow_mut().paint());
+
+                let first_child = n.borrow().first_child();
+                Self::paint_node(&first_child, display_items);
+
+                let next_sibling = n.borrow().next_sibling();
+                Slef::paint_node(&next_sibling, display_items);
+            }
+            None => (),
+        }
+    }
+
+    pub fn paint(&self) -> Vec<DisplayItem> {
+        let mut display_items = Vec::new();
+
+        Self::paint_node(&self.root, &mut display_items);
+
+        display_items
     }
 
     pub fn root(&self) -> Option<Rc<RefCell<LayoutObject>>> {

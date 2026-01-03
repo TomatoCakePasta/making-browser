@@ -16,6 +16,37 @@ use crate::constants::CONTENT_AREA_WIDTH;
 use crate::constants::CHAR_WIDTH;
 use crate::constants::CHAR_HEIGHT_WITH_PADDING;
 use crate::renderer::layout::computed_style::FontSize;
+use crate::display_item::DisplayItem;
+use alloc::vec;
+use crate::constants::WINDOW_PADDING;
+use crate::constants::WINDOW_WIDTH;
+use alloc::string::String;
+
+// Find line break position
+fn find_index_for_line_break(line: String, max_indez: usize) -> usize {
+    for i in (0..max_index).rev() {
+        if line.chars().collect::<Vec<char>>()[i] == ' ' {
+            return i;
+        }
+    }
+    max_index
+}
+
+// Line break at whitespace
+fn split_text(line: String, char_width: i64) -> Vec<String> {
+    let mut result: Vec<String> = vec![];
+    if line.len() as i64 * char_width > (WINDOW_WIDTH + WINDOW_PADDING) {
+        let s = line.split_at(find_index_for_line_break(
+            line.clone(),
+            ((WINDOW_WIDTH + WINDOW_PADDING) / char_width) as usize,
+        ));
+        result.push(s.0.to_string());
+        result.extend(split_text(s.1.trim().to_string(), char_width))
+    } else {
+        result.push(line);
+    }
+    result
+}
 
 pub fn create_layout_object(
     node: &Option<Rc<RefCell<Node>>>,
@@ -99,6 +130,67 @@ impl LayoutObject {
             point: LayoutPoint::new(0, 0),
             size: LayoutSize::new(0, 0),
         }
+    }
+
+    // convert the node to a DisplayItem
+    pub fn paint(&mut self) -> Vec<DisplayItem> {
+        if self.style.display() == DisplayType::DisplayNone {
+            return vec![];
+        }
+
+        match self.kind {
+            LayoutObjectKind::Block => {
+                if let NodeKind::Element(_e) = self.node_kind() {
+                    return vec![DisplayItem::Rect {
+                        style: self.style(),
+                        layout_point: self.point(),
+                        layout_size: self.size(),
+                    }];
+                }
+            }
+            LayoutObjectKind::Inline => {
+                // This browser does not have inline elements to draw.
+                // If the <img> tag is supported, it will be processed within this arm.
+            }
+            LayoutObjectKind::Text => {
+                if let NodeKind::Text(t) = self.node_kind() {
+                    let mut v = vec![];
+
+                    let ratio = match self.style.font_size() {
+                        FontSize::Medium => 1,
+                        FontSize::XLarge => 2,
+                        FontSize::XXLarge => 3,
+                    };
+
+                    let plain_text = t
+                        .replace("\n", " ")
+                        .split(' ')
+                        .filter(|s| !s.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+
+                    let lines = split_text(plain_text, CHAR_WIDTH * ratio);
+                    let mut i = 0;
+
+                    for linr in lines {
+                        let itme = DisplayItem::Text {
+                            text: line,
+                            style: self.style(),
+                            layout_point: LayoutPoint::new(
+                                self.point().x(),
+                                self.point().y() + CHAR_HEIGHT_WITH_PADDING * i,
+                            ),
+                        };
+                        v.push(item);
+                        i += 1;
+                    }
+
+                    return v;
+                }
+            }
+        }
+
+        vec![]
     }
 
     pub fn compute_size(&mut self, parent_size: LayoutSize) {
