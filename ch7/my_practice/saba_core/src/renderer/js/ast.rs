@@ -200,7 +200,7 @@ impl JsParser {
         };
 
         match t {
-            Token::Puunctuator(c) => match c {
+            Token::Punctuator(c) => match c {
                 '=' => self.assignment_expression(),
                 _ => None,
             },
@@ -244,12 +244,14 @@ impl JsParser {
 
         let node = match t {
             Token::Keyword(keyword) => {
-                // consume reserved word of "var"
-                assert!(self.t.next().is_some());
+                if keyword == "var" {
+                    // consume reserved word of "var"
+                    assert!(self.t.next().is_some());
 
-                self.variable_declaration()
-            } else {
-                None
+                    self.variable_declaration()
+                } else {
+                    None
+                }
             }
             _ => Node::new_expression_statement(self.assignment_expression()),
         };
@@ -343,6 +345,56 @@ mod tests {
             },
         )))));
 
+        expected.set_body(body);
+        assert_eq!(expected, parser.parse_ast());
+    }
+
+    #[test]
+    fn test_assign_variable() {
+        let input = "var foo=\"bar\";".to_string();
+        let lexer = JsLexer::new(input);
+        let mut parser = JsParser::new(lexer);
+        let mut expected = Program::new();
+        let mut body = Vec::new();
+
+        body.push(Rc::new(Node::VariableDeclaration {
+            declarations: [Some(Rc::new(Node::VariableDeclarator {
+                id: Some(Rc::new(Node::Identifier("foo".to_string()))),
+                init: Some(Rc::new(Node::StringLiteral("bar".to_string()))),
+            }))]
+            .to_vec(),
+        }));
+        expected.set_body(body);
+        assert_eq!(expected, parser.parse_ast());
+    }
+
+    #[test]
+    fn test_add_variable_and_num() {
+        let input = "var foo=42; var result=foo+1;".to_string();
+        let lexer = JsLexer::new(input);
+        let mut parser = JsParser::new(lexer);
+        let mut expected = Program::new();
+        let mut body = Vec::new();
+
+        body.push(Rc::new(Node::VariableDeclaration {
+            declarations: [Some(Rc::new(Node::VariableDeclarator {
+                id: Some(Rc::new(Node::Identifier("foo".to_string()))),
+                init: Some(Rc::new(Node::NumericalLiteral(42))),
+            }))]
+            .to_vec(),
+        }));
+        
+        body.push(Rc::new(Node::VariableDeclaration {
+            declarations: [Some(Rc::new(Node::VariableDeclarator {
+                id: Some(Rc::new(Node::Identifier("result".to_string()))),
+                init: Some(Rc::new(Node::AdditiveExpression {
+                    operator: '+',
+                    left: Some(Rc::new(Node::Identifier("foo".to_string()))),
+                    right: Some(Rc::new(Node::NumericalLiteral(1))),
+                })),
+            }))]
+            .to_vec(),
+        }));
         expected.set_body(body);
         assert_eq!(expected, parser.parse_ast());
     }

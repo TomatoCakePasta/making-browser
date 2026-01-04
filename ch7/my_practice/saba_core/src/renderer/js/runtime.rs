@@ -85,6 +85,7 @@ impl JsRuntime {
                 None
             }
             Node::NumericalLiteral(value) => Some(RuntimeValue::Number(*value)),
+            _ => todo!(),
         }
     }
 
