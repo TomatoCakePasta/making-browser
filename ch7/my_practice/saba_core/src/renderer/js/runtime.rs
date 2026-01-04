@@ -12,7 +12,7 @@ use alloc::format;
 use core::fmt::Display;
 use core::fmt::Formatter;
 
-type VariableMap = Vec<(String, Option<RuntimeValue)>;
+type VariableMap = Vec<(String, Option<RuntimeValue>)>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeValue {
@@ -150,9 +150,9 @@ impl JsRuntime {
                 }
             }
             Node::AssignmentExpression {
-                operator: _,
-                left: _,
-                right: _,
+                operator,
+                left,
+                right,
             } => {
                 if operator != &'=' {
                     return None;
@@ -199,7 +199,7 @@ impl JsRuntime {
                     None => Some(RuntimeValue::StringLiteral(name.to_string())),
                 }
             }
-            Node::StringLiteral(value) => Some(RuntimeValue::convert_dom_to_string(value.to_string())),
+            Node::StringLiteral(value) => Some(RuntimeValue::StringLiteral(value.to_string())),
             // _ => todo!(),
         }
     }
@@ -259,6 +259,57 @@ mod tests {
         let ast = parser.parse_ast();
         let mut runtime = JsRuntime::new();
         let expected = [Some(RuntimeValue::Number(1))];
+        let mut i = 0;
+
+        for node in ast.body() {
+            let result = runtime.eval(&Some(node.clone()), runtime.env.clone());
+            assert_eq!(expected[i], result);
+            i += 1;
+        }
+    }
+
+    #[test]
+    fn test_assign_variable() {
+        let input = "var foo=42;".to_string();
+        let lexer = JsLexer::new(input);
+        let mut parser = JsParser::new(lexer);
+        let ast = parser.parse_ast();
+        let mut runtime = JsRuntime::new();
+        let expected = [None];
+        let mut i = 0;
+
+        for node in ast.body() {
+            let result = runtime.eval(&Some(node.clone()), runtime.env.clone());
+            assert_eq!(expected[i], result);
+            i += 1;
+        }
+    }
+
+    #[test]
+    fn test_add_variable_and_num() {
+        let input = "var foo=42; foo+1".to_string();
+        let lexer = JsLexer::new(input);
+        let mut parser = JsParser::new(lexer);
+        let ast = parser.parse_ast();
+        let mut runtime = JsRuntime::new();
+        let expected = [None, Some(RuntimeValue::Number(43))];
+        let mut i = 0;
+
+        for node in ast.body() {
+            let result = runtime.eval(&Some(node.clone()), runtime.env.clone());
+            assert_eq!(expected[i], result);
+            i += 1;
+        }
+    }
+
+    #[test]
+    fn test_reassign_variable() {
+        let input = "var foo=42; foo=1; foo".to_string();
+        let lexer = JsLexer::new(input);
+        let mut parser = JsParser::new(lexer);
+        let ast = parser.parse_ast();
+        let mut runtime = JsRuntime::new();
+        let expected = [None, None, Some(RuntimeValue::Number(1))];
         let mut i = 0;
 
         for node in ast.body() {
