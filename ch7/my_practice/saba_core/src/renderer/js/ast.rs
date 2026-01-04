@@ -3,6 +3,7 @@ use crate::renderer::js::token::JsLexer;
 use core::iter::Peekable;
 use alloc::vec::Vec;
 use crate::renderer::js::token::Token;
+use alloc::string::ToString;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Node {
@@ -192,5 +193,55 @@ impl JsParser {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::string::ToString;
+
+    #[test]
+    fn test_empty() {
+        let input = "".to_string();
+        let lexer = JsLexer::new(input);
+        let mut parser = JsParser::new(lexer);
+        let expected = Program::new();
+        assert_eq!(expected, parser.parse_ast());
+    }
+
+    #[test]
+    fn test_num() {
+        let input = "42".to_string();
+        let lexer = JsLexer::new(input);
+        let mut parser = JsParser::new(lexer);
+        let mut expected = Program::new();
+        let mut body = Vec::new();
+
+        body.push(Rc::new(Node::ExpressionStatement(Some(Rc::new(
+            Node::NumericalLiteral(42),
+        )))));
+        expected.set_body(body);
+        assert_eq!(expected, parser.parse_ast());
+    }
+
+    #[test]
+    fn test_add_nums() {
+        let input = "1 + 2".to_string();
+        let lexer = JsLexer::new(input);
+        let mut parser = JsParser::new(lexer);
+        let mut expected = Program::new();
+        let mut body = Vec::new();
+
+        body.push(Rc::new(Node::ExpressionStatement(Some(Rc::new(
+            Node::AdditiveExpression {
+                operator: '+',
+                left: Some(Rc::new(Node::NumericalLiteral(1))),
+                right: Some(Rc::new(Node::NumericalLiteral(2))),
+            },
+        )))));
+
+        expected.set_body(body);
+        assert_eq!(expected, parser.parse_ast());
     }
 }
