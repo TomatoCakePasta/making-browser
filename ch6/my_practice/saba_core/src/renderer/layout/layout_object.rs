@@ -344,7 +344,7 @@ impl LayoutObject {
     pub fn cascading_style(&mut self, declarations: Vec<Declaration>) {
         for declaration in declarations {
             match declaration.property.as_str() {
-                "backgrouind-color" => {
+                "background-color" => {
                     if let ComponentValue::Ident(value) = &declaration.value {
                         let color = match Color::from_name(&value) {
                             Ok(color) => color,
