@@ -20,6 +20,7 @@ use noli::sys::wasabi::Api;
 use alloc::string::String;
 use noli::rect::Rect;
 use crate::cursor::Cursor;
+use saba_core::http::HttpResponse;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InputMode {
@@ -57,18 +58,24 @@ impl WasabiUI {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub fn start(
+        &mut self,
+        handle_url: fn(String) -> Result<HttpResponse, Error>,
+    ) -> Result<(), Error> {
         self.setup()?;
 
-        self.run_app()?;
+        self.run_app(handle_url)?;
 
         Ok(())
     }
 
-    fn run_app(&mut self) -> Result<(), Error> {
+    fn run_app(
+        &mut self,
+        handle_url: fn(String) -> Result<HttpResponse, Error>,
+    ) -> Result<(), Error> {
         loop {
             self.handle_mouse_input()?;
-            self.handle_key_input()?;
+            self.handle_key_input(handle_url)?;
         }
     }
 
@@ -119,7 +126,10 @@ impl WasabiUI {
         Ok(())
     }
 
-    fn handle_key_input(&mut self) -> Result<(), Error> {
+    fn handle_key_input(
+        &mut self,
+        handle_url: fn(String) -> Result<HttpResponse, Error>,
+    ) -> Result<(), Error> {
         // if let Some(c) = Api::read_key() {
         //     println!("input text: {:?}", c);
         // }
@@ -131,7 +141,13 @@ impl WasabiUI {
             }
             InputMode::Editing => {
                 if let Some(c) = Api::read_key() {
-                    if c == 0x7F as char || c == 0x08 as char {
+                    if c == 0x0A as char {
+                        // start navigation when Enter is pushed
+                        self.start_navigation(handle_url, self.input_url.clone())?;
+
+                        self.input_url = String::new();
+                        self.input_mode = InputMode::Normal;
+                    } else if c == 0x7F as char || c == 0x08 as char {
                         // delete the last character when delete or backspace key is pushed
                         self.input_url.pop();
                         self.update_address_bar()?;
@@ -140,6 +156,26 @@ impl WasabiUI {
                         self.update_address_bar()?;
                     }
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn start_navigation(
+        &mut self,
+        handle_url: fn(String) -> Result<HttpResponse, Error>,
+        destination: String,
+    ) -> Result<(), Error> {
+        self.clear_content_area()?;
+
+        match handle_url(destination) {
+            Ok(response) => {
+                let page = self.browser.borrow().current_page();
+                page.borrow_mut().receive_response(response);
+            }
+            Err(e) => {
+                return Err(e);
             }
         }
 
@@ -265,6 +301,29 @@ impl WasabiUI {
             )
             .expect("failed to create a rect for the address bar"),
         );
+
+        Ok(())
+    }
+
+    fn clear_content_area(&mut self) -> Result<(), Error> {
+        // paint content area white
+        if self
+            .window
+            .fill_rect(
+                WHITE,
+                0,
+                TOOLBAR_HEIGHT + 2,
+                CONTENT_AREA_WIDTH,
+                CONTENT_AREA_HEIGHT - 2,
+            )
+            .is_err()
+        {
+            return Err(Error::InvalidUI(
+                "failed to clear a content area".to_string(),
+            ));
+        }
+
+        self.window.flush();
 
         Ok(())
     }
