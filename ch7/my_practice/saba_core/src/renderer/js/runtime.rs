@@ -5,18 +5,30 @@ use core::borrow::Borrow;
 use core::ops::Add;
 use core::ops::Sub;
 use alloc::string::ToString;
+use core::cell::RefCell;
+use alloc::vec::Vec;
+use alloc::string::String;
+use alloc::format;
+use core::fmt::Display;
+use core::fmt::Formatter;
+
+type VariableMap = Vec<(String, Option<RuntimeValue)>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeValue {
     Number(u64),
+    StringLiteral(String),
 }
 
 impl Add<RuntimeValue> for RuntimeValue {
     type Output = RuntimeValue;
 
     fn add(self, rhs: RuntimeValue) -> RuntimeValue {
-        let (RuntimeValue::Number(left_num), RuntimeValue::Number(right_num)) = (&self, &rhs);
-        return RuntimeValue::Number(left_num + right_num);
+        if let (RuntimeValue::Number(left_num), RuntimeValue::Number(right_num)) = (&self, &rhs) {
+            return RuntimeValue::Number(left_num + right_num);
+        }
+
+        RuntimeValue::StringLiteral(self.to_string() + &rhs.to_string())
     }
 }
 
@@ -24,23 +36,89 @@ impl Sub<RuntimeValue> for RuntimeValue {
     type Output = RuntimeValue;
 
     fn sub(self, rhs: RuntimeValue) -> RuntimeValue {
-        let (RuntimeValue::Number(left_num), RuntimeValue::Number(right_num)) = (&self, &rhs);
-        return RuntimeValue::Number(left_num - right_num);
+        if let (RuntimeValue::Number(left_num), RuntimeValue::Number(right_num)) = (&self, &rhs) {
+            return RuntimeValue::Number(left_num - right_num);
+        }
+
+        // NaN: Not a Number
+        RuntimeValue::Number(u64::MIN)
+    }
+}
+
+impl Display for RuntimeValue {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        let s = match self {
+            RuntimeValue::Number(value) => format!("{}", value),
+            RuntimeValue::StringLiteral(value) => value.to_string(),
+        };
+        write!(f, "{}", s)
+    }
+}
+
+// Manage JavaScript variable scope
+#[derive(Debug, Clone)]
+pub struct Environment {
+    variables: VariableMap,
+    // outside scope
+    outer: Option<Rc<RefCell<Environment>>>,
+}
+
+impl Environment {
+    // constructor
+    fn new(outer: Option<Rc<RefCell<Environment>>>) -> Self {
+        Self {
+            variables: VariableMap::new(),
+            outer,
+        }
+    }
+
+    pub fn get_variable(&self, name: String) -> Option<RuntimeValue> {
+        for variable in &self.variables {
+            if variable.0 == name {
+                // local variable
+                return variable.1.clone();
+            }
+        }
+
+        if let Some(env) = &self.outer {
+            env.borrow_mut().get_variable(name)
+        } else {
+            None
+        }
+    }
+
+    fn add_variable(&mut self, name: String, value: Option<RuntimeValue>) {
+        self.variables.push((name, value));
+    }
+
+    fn update_variable(&mut self, name: String, value: Option<RuntimeValue>) {
+        for i in 0..self.variables.len() {
+            if self.variables[i].0 == name {
+                self.variables.remove(i);
+                self.variables.push((name, value));
+                return;
+            }
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct JsRuntime {}
+pub struct JsRuntime {
+    env: Rc<RefCell<Environment>>,
+}
 
 impl JsRuntime {
     // constructor
     pub fn new() -> Self {
-        Self {}
+        Self {
+            env: Rc::new(RefCell::new(Environment::new(None))),
+        }
     }
 
     fn eval(
         &mut self,
         node: &Option<Rc<Node>>,
+        env: Rc<RefCell<Environment>>,
     ) -> Option<RuntimeValue> {
         let node = match node {
             Some(n) => n,
@@ -48,17 +126,17 @@ impl JsRuntime {
         };
 
         match node.borrow() {
-            Node::ExpressionStatement(expr) => return self.eval(&expr),
+            Node::ExpressionStatement(expr) => return self.eval(&expr, env.clone()),
             Node::AdditiveExpression {
                 operator,
                 left,
                 right,
             } => {
-                let left_value = match self.eval(&left) {
+                let left_value = match self.eval(&left, env.clone()) {
                     Some(value) => value,
                     None => return None,
                 };
-                let right_value = match self.eval(&right) {
+                let right_value = match self.eval(&right, env.clone()) {
                     Some(value) => value,
                     None => return None,
                 };
@@ -76,6 +154,17 @@ impl JsRuntime {
                 left: _,
                 right: _,
             } => {
+                if operator != &'=' {
+                    return None;
+                }
+                // Reassigning variables
+                if let Some(node) = left {
+                    if let Node::Identifier(id) = node.borrow() {
+                        let new_value = self.eval(right, env.clone());
+                        env.borrow_mut().update_variable(id.to_string(), new_value);
+                        return None;
+                    }
+                }
                 None
             }
             Node::MemberExpression {
@@ -85,13 +174,39 @@ impl JsRuntime {
                 None
             }
             Node::NumericalLiteral(value) => Some(RuntimeValue::Number(*value)),
-            _ => todo!(),
+            Node::VariableDeclaration { declarations } => {
+                for declaration in declarations {
+                    self.eval(&declaration, env.clone());
+                }
+                None
+            }
+            Node::VariableDeclarator { id, init } => {
+                if let Some(node) = id {
+                    if let Node::Identifier(id) = node.borrow() {
+                        let init = self.eval(&init, env.clone());
+                        env.borrow_mut().add_variable(id.to_string(), init);
+                    }
+                }
+                None
+            }
+            Node::Identifier(name) => {
+                match env.borrow_mut().get_variable(name.to_string()) {
+                    Some(v) => Some(v),
+                    // If the variable is used for the first time, 
+                    // it will be treated as a string since no value has been saved yet.
+                    // e.g. var a = 42;
+                    // a is treated as StringLiteral
+                    None => Some(RuntimeValue::StringLiteral(name.to_string())),
+                }
+            }
+            Node::StringLiteral(value) => Some(RuntimeValue::convert_dom_to_string(value.to_string())),
+            // _ => todo!(),
         }
     }
 
     pub fn execute(&mut self, program: &Program) {
         for node in program.body() {
-            self.eval(&Some(node.clone()));
+            self.eval(&Some(node.clone()), self.env.clone());
         }
     }
 }
@@ -113,7 +228,7 @@ mod tests {
         let mut i = 0;
 
         for node in ast.body() {
-            let result = runtime.eval(&Some(node.clone()));
+            let result = runtime.eval(&Some(node.clone()), runtime.env.clone());
             assert_eq!(expected[i], result);
             i += 1;
         }
@@ -130,7 +245,7 @@ mod tests {
         let mut i = 0;
 
         for node in ast.body() {
-            let result = runtime.eval(&Some(node.clone()));
+            let result = runtime.eval(&Some(node.clone()), runtime.env.clone());
             assert_eq!(expected[i], result);
             i += 1;
         }
@@ -147,7 +262,7 @@ mod tests {
         let mut i = 0;
 
         for node in ast.body() {
-            let result = runtime.eval(&Some(node.clone()));
+            let result = runtime.eval(&Some(node.clone()), runtime.env.clone());
             assert_eq!(expected[i], result);
             i += 1;
         }
