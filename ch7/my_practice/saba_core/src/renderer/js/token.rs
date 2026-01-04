@@ -201,4 +201,26 @@ mod tests {
         }
         assert!(lexer.peek().is_none());
     }
+
+    #[test]
+    fn test_assign_variable() {
+        let input = "var foo=\"bar\";".to_string();
+        let mut lexer = JsLexer::new(input).peekable();
+        let expected = [
+            Token::Keyword("var".to_string()),
+            Token::Identifier("foo".to_string()),
+            Token::Punctuator('='),
+            Token::StringLiteral("bar".to_string()),
+            Token::Punctuator(';'),
+        ]
+        .to_vec();
+
+        let mut i = 0;
+
+        while lexer.peek().is_some() {
+            assert_eq!(Some(expected[i].clone()), lexer.next());
+            i += 1;
+        }
+        assert!(lexer.peek().is_none());
+    }
 }
