@@ -19,6 +19,7 @@ use noli::sys::api::MouseEvent;
 use noli::sys::wasabi::Api;
 use alloc::string::String;
 use noli::rect::Rect;
+use crate::cursor::Cursor;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InputMode {
@@ -34,6 +35,7 @@ pub struct WasabiUI {
     input_url: String,
     input_mode: InputMode,
     window: Window,
+    cursor: Cursor,
 }
 
 impl WasabiUI {
@@ -51,6 +53,7 @@ impl WasabiUI {
                 WINDOW_HEIGHT,
             )
             .unwrap(),
+            cursor: Cursor::new(),
         }
     }
 
@@ -71,6 +74,12 @@ impl WasabiUI {
 
     fn handle_mouse_input(&mut self) -> Result<(), Error> {
         if let Some(MouseEvent { button, position }) = Api::get_mouse_cursor_info() {
+            // draw mouse cursor
+            self.window.flush_area(self.cursor.rect());
+            self.cursor.set_position(position.x, position.y);
+            self.window.flush_area(self.cursor.rect());
+            self.cursor.flush();
+
             if button.l() || button.c() || button.r() {
                 // println!("mouse clicked {:?}", button);
                 
